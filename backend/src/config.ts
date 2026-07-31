@@ -43,8 +43,10 @@ export const config = {
   kalshi: {
     env: KALSHI_ENV,
     baseUrl: KALSHI_BASE_URLS[KALSHI_ENV],
-    apiKeyId: required('KALSHI_API_KEY_ID'),
-    privateKey: required('KALSHI_PRIVATE_KEY'),
+    // Optional at boot so the server can start (and pass health checks) before
+    // credentials are configured. Trading endpoints check `kalshiConfigured`.
+    apiKeyId: optional('KALSHI_API_KEY_ID', ''),
+    privateKey: optional('KALSHI_PRIVATE_KEY', ''),
     mlbSeriesTicker: optional('KALSHI_MLB_SERIES_TICKER', 'KXMLBGAME'),
   },
 
@@ -58,6 +60,12 @@ export const config = {
 
   get isLive(): boolean {
     return KALSHI_ENV === 'prod';
+  },
+
+  get kalshiConfigured(): boolean {
+    return (
+      !!process.env.KALSHI_API_KEY_ID?.trim() && !!process.env.KALSHI_PRIVATE_KEY?.trim()
+    );
   },
 } as const;
 

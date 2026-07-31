@@ -10,9 +10,17 @@ import type {
 } from './types.js';
 
 const BASE = config.kalshi.baseUrl;
-const PRIVATE_KEY = normalizePrivateKey(config.kalshi.privateKey);
 // Path prefix that must be included in the signed message (everything after host).
 const PATH_PREFIX = new URL(BASE).pathname; // "/trade-api/v2"
+
+// Private key is normalised lazily on first use so the server can boot before
+// credentials are configured (e.g. a fresh Railway deploy).
+let cachedPrivateKey: string | null = null;
+function getPrivateKey(): string {
+  if (!config.kalshiConfigured) throw new KalshiNotConfigured();
+  if (!cachedPrivateKey) cachedPrivateKey = normalizePrivateKey(config.kalshi.privateKey);
+  return cachedPrivateKey;
+}
 
 export class KalshiError extends Error {
   constructor(
@@ -22,6 +30,14 @@ export class KalshiError extends Error {
   ) {
     super(message);
     this.name = 'KalshiError';
+  }
+}
+
+/** Thrown when a Kalshi endpoint is hit before API credentials are set. */
+export class KalshiNotConfigured extends Error {
+  constructor() {
+    super('Kalshi credentials are not configured (set KALSHI_API_KEY_ID and KALSHI_PRIVATE_KEY).');
+    this.name = 'KalshiNotConfigured';
   }
 }
 
@@ -40,7 +56,7 @@ async function request<T>(
 
   // NOTE: the signature covers only the path, never the query string.
   const authHeaders = signRequest({
-    privateKeyPem: PRIVATE_KEY,
+    privateKeyPem: getPrivateKey(),
     apiKeyId: config.kalshi.apiKeyId,
     method,
     path,

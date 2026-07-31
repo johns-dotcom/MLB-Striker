@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { kalshi, KalshiError } from '../kalshi/client.js';
+import { kalshi, KalshiError, KalshiNotConfigured } from '../kalshi/client.js';
 
 export async function marketsRoutes(app: FastifyInstance) {
   // MLB game events (each event ≈ one game), with their markets attached.
@@ -52,6 +52,10 @@ export async function marketsRoutes(app: FastifyInstance) {
 }
 
 export function handleKalshiError(err: unknown, reply: FastifyReply) {
+  if (err instanceof KalshiNotConfigured) {
+    reply.code(503);
+    return { error: 'kalshi_not_configured', message: err.message };
+  }
   if (err instanceof KalshiError) {
     reply.code(err.status >= 400 && err.status < 600 ? err.status : 502);
     return { error: 'kalshi_error', status: err.status, detail: err.body };
