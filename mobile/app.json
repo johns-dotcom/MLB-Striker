@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "MLB Striker",
+    "slug": "mlb-striker",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "mlbstriker",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "co.boomrecords.mlbstriker"
+    },
+    "android": {
+      "package": "co.boomrecords.mlbstriker"
+    }
+  }
+}
