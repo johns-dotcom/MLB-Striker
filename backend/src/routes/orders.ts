@@ -12,7 +12,9 @@ import type { KalshiOrderRequest } from '../kalshi/types.js';
 const legSchema = z
   .object({
     ticker: z.string().min(1),
-    action: z.enum(['buy', 'sell']),
+    // Buy-only. Sells are intentionally rejected: the app doesn't offer them and
+    // the YES/NO→bid/ask mapping below is only correct for buys.
+    action: z.literal('buy'),
     side: z.enum(['yes', 'no']),
     // Absolute ceiling; the real limiter is the per-leg notional cap below.
     count: z.number().int().positive().max(1_000_000),
@@ -32,10 +34,9 @@ const basketSchema = z
   })
   .strict();
 
-/** Max capital at risk for one leg, in cents. Buy: stake. Sell: 100−price per contract. */
+/** Max capital at risk for one (buy) leg, in cents = stake = price × count. */
 function legRiskCents(leg: z.infer<typeof legSchema>): number {
-  const perContract = leg.action === 'buy' ? leg.price : 100 - leg.price;
-  return perContract * leg.count;
+  return leg.price * leg.count;
 }
 
 export async function ordersRoutes(app: FastifyInstance) {
@@ -122,13 +123,20 @@ export async function ordersRoutes(app: FastifyInstance) {
             ? 'failed'
             : 'partial';
 
-      const basketId = await logBasket({
-        env: kalshi.env,
-        status,
-        notionalUsd: totalRiskCents / 100,
-        note: basket.note,
-        outcomes,
-      });
+      // Log is best-effort: orders are already placed, so a DB failure must not
+      // turn a real placement into an error response the app treats as failed.
+      let basketId: string | null = null;
+      try {
+        basketId = await logBasket({
+          env: kalshi.env,
+          status,
+          notionalUsd: totalRiskCents / 100,
+          note: basket.note,
+          outcomes,
+        });
+      } catch (logErr) {
+        req.log.error({ err: logErr }, 'logBasket failed (orders already placed)');
+      }
 
       // Always 200 — the basket was processed; per-order `status` conveys the
       // outcome so the app can render each order's result (incl. rejection text).

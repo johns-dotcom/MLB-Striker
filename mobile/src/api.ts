@@ -14,7 +14,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   const text = await res.text();
-  const body = text ? JSON.parse(text) : undefined;
+  const body = safeParse(text);
   if (!res.ok) {
     // Only drop the session on a genuine auth-token failure (requireAuth),
     // not on business-logic 401s like a wrong current password.
@@ -35,7 +35,7 @@ export async function login(password: string): Promise<string> {
     body: JSON.stringify({ password }),
   });
   const text = await res.text();
-  const body = text ? JSON.parse(text) : {};
+  const body = safeParse(text) ?? {};
   if (!res.ok || !body?.token) {
     const msg =
       res.status === 401
@@ -46,6 +46,17 @@ export async function login(password: string): Promise<string> {
     throw new ApiError(msg, res.status, body);
   }
   return body.token as string;
+}
+
+// Tolerate non-JSON responses (e.g. an HTML 502 from a proxy) without throwing
+// a raw SyntaxError — callers rely on ApiError.
+function safeParse(text: string): any {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 export class ApiError extends Error {
