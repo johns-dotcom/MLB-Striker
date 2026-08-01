@@ -25,7 +25,8 @@ export default function LoginScreen() {
     setBusy(true);
     setError(null);
     try {
-      const token = await apiLogin(password);
+      // Trim — mobile keyboards/autofill often add a trailing space.
+      const token = await apiLogin(password.trim());
       setToken(token);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));

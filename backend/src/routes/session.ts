@@ -28,7 +28,8 @@ export async function sessionRoutes(app: FastifyInstance) {
       reply.code(400);
       return { error: 'invalid_request' };
     }
-    if (!safeEqual(parsed.data.password, config.appPassword)) {
+    // Trim both sides — mobile keyboards/autofill often add a trailing space.
+    if (!safeEqual(parsed.data.password.trim(), config.appPassword.trim())) {
       reply.code(401);
       return { error: 'invalid_password' };
     }
