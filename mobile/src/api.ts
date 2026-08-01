@@ -68,16 +68,6 @@ export const api = {
   gameDetail: (sport: string, gameCode: string) =>
     req<GameDetail>(`/sports/${encodeURIComponent(sport)}/games/${encodeURIComponent(gameCode)}`),
 
-  balance: () => req<{ env: string; balanceCents: number }>('/portfolio/balance'),
-
-  positions: () =>
-    req<{ env: string; positions: { ticker: string; position: number; realized_pnl: number }[] }>(
-      '/portfolio/positions',
-    ),
-
-  history: () =>
-    req<{ dbEnabled: boolean; baskets: Record<string, unknown>[] }>('/history/baskets'),
-
   changePassword: (currentPassword: string, newPassword: string) =>
     req<{ ok: boolean }>('/auth/change-password', {
       method: 'POST',
