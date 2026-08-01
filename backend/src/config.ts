@@ -35,6 +35,9 @@ const KALSHI_BASE_URLS = {
 export const config = {
   port: num('PORT', 8080),
   apiAuthToken: required('API_AUTH_TOKEN'),
+  // Shared password for the web app's login gate. When set, POST /auth/login
+  // exchanges it for the API token so the token never ships in the web bundle.
+  appPassword: optional('APP_PASSWORD', ''),
   corsOrigins: optional('CORS_ORIGINS', '*')
     .split(',')
     .map((s) => s.trim())

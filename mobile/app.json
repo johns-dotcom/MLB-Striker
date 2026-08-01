@@ -13,6 +13,9 @@
     },
     "android": {
       "package": "co.boomrecords.mlbstriker"
-    }
+    },
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }

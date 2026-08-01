@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -115,10 +116,12 @@ export default function BasketScreen() {
   const { legs, clear, totalRiskUsd } = useBasket();
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<StrikeResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function doStrike() {
     setSubmitting(true);
     setResult(null);
+    setError(null);
     try {
       // Ask the backend which env it's on, so the confirmation is truthful.
       const h = await api.health();
@@ -126,7 +129,7 @@ export default function BasketScreen() {
       setResult(res);
       if (res.status === 'submitted') clear();
     } catch (e) {
-      Alert.alert('Strike failed', e instanceof ApiError ? e.message : String(e));
+      setError(e instanceof ApiError ? e.message : String(e));
     } finally {
       setSubmitting(false);
     }
@@ -134,14 +137,18 @@ export default function BasketScreen() {
 
   function confirmStrike() {
     if (legs.length === 0) return;
-    Alert.alert(
-      'Strike basket?',
-      `Submit ${legs.length} order${legs.length > 1 ? 's' : ''} — total risk ${usd(totalRiskUsd())}.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Strike', style: 'destructive', onPress: doStrike },
-      ],
-    );
+    const message = `Submit ${legs.length} order${legs.length > 1 ? 's' : ''} — total risk ${usd(totalRiskUsd())}.`;
+    // Alert.alert has no button UI on react-native-web, so use window.confirm there.
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`Strike basket?\n\n${message}`)) {
+        doStrike();
+      }
+      return;
+    }
+    Alert.alert('Strike basket?', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Strike', style: 'destructive', onPress: doStrike },
+    ]);
   }
 
   return (
@@ -157,6 +164,8 @@ export default function BasketScreen() {
         {legs.map((leg) => (
           <LegCard key={leg.id} leg={leg} />
         ))}
+
+        {error && <Text style={styles.errorBox}>⚠️ {error}</Text>}
 
         {result && (
           <View style={styles.resultCard}>
@@ -284,6 +293,15 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     padding: theme.space(3),
     gap: theme.space(1),
+  },
+  errorBox: {
+    color: theme.colors.danger,
+    fontSize: 14,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.danger,
+    borderRadius: theme.radius.md,
+    padding: theme.space(3),
   },
   resultTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '700' },
   resultMeta: { color: theme.colors.textDim, fontSize: 13, marginBottom: theme.space(1) },

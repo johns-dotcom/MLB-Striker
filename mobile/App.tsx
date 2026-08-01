@@ -1,10 +1,12 @@
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { Text } from 'react-native';
+import { Text, TouchableOpacity } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { theme } from './src/theme';
 import { useBasket } from './src/store';
+import { useAuth } from './src/authStore';
+import LoginScreen from './src/screens/LoginScreen';
 import GamesScreen from './src/screens/GamesScreen';
 import BasketScreen from './src/screens/BasketScreen';
 import PortfolioScreen from './src/screens/PortfolioScreen';
@@ -29,6 +31,17 @@ function TabIcon({ label, color }: { label: string; color: string }) {
 
 export default function App() {
   const count = useBasket((s) => s.legs.length);
+  const token = useAuth((s) => s.token);
+  const logout = useAuth((s) => s.logout);
+
+  if (!token) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <LoginScreen />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -41,6 +54,11 @@ export default function App() {
             tabBarStyle: { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border },
             tabBarActiveTintColor: theme.colors.text,
             tabBarInactiveTintColor: theme.colors.textDim,
+            headerRight: () => (
+              <TouchableOpacity onPress={logout} style={{ paddingHorizontal: 16 }}>
+                <Text style={{ color: theme.colors.textDim, fontWeight: '600' }}>Log out</Text>
+              </TouchableOpacity>
+            ),
           }}
         >
           <Tab.Screen

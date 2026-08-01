@@ -1,17 +1,22 @@
 import type { BasketLeg, Game, StrikeResult } from './types';
+import { useAuth } from './authStore';
 
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
-const TOKEN = process.env.EXPO_PUBLIC_API_TOKEN ?? '';
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = useAuth.getState().token ?? '';
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
     },
   });
+  // A 401 means our token is stale/invalid — drop it so the login screen shows.
+  if (res.status === 401) {
+    useAuth.getState().logout();
+  }
   const text = await res.text();
   const body = text ? JSON.parse(text) : undefined;
   if (!res.ok) {
@@ -19,6 +24,27 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(msg, res.status, body);
   }
   return body as T;
+}
+
+/** Exchange the shared password for an API token. Throws ApiError on bad password. */
+export async function login(password: string): Promise<string> {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : {};
+  if (!res.ok || !body?.token) {
+    const msg =
+      res.status === 401
+        ? 'Incorrect password'
+        : body?.error === 'login_not_configured'
+          ? 'Login is not set up on the server yet'
+          : body?.error || `HTTP ${res.status}`;
+    throw new ApiError(msg, res.status, body);
+  }
+  return body.token as string;
 }
 
 export class ApiError extends Error {

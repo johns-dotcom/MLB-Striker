@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import { config } from './config.js';
 import { requireAuth } from './auth.js';
 import { healthRoutes } from './routes/health.js';
+import { sessionRoutes } from './routes/session.js';
 import { marketsRoutes } from './routes/markets.js';
 import { ordersRoutes } from './routes/orders.js';
 import { portfolioRoutes } from './routes/portfolio.js';
@@ -20,8 +21,9 @@ async function main() {
     origin: config.corsOrigins.includes('*') ? true : config.corsOrigins,
   });
 
-  // Public liveness endpoint.
+  // Public endpoints (no bearer): liveness + login.
   await app.register(healthRoutes);
+  await app.register(sessionRoutes);
 
   // Everything below requires the bearer token.
   await app.register(async (authed) => {
