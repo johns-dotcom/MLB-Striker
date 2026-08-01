@@ -68,6 +68,14 @@ export const api = {
   gameDetail: (sport: string, gameCode: string) =>
     req<GameDetail>(`/sports/${encodeURIComponent(sport)}/games/${encodeURIComponent(gameCode)}`),
 
+  prices: (tickers: string[]) =>
+    req<{
+      prices: Record<
+        string,
+        { yesBid?: number; yesAsk?: number; noBid?: number; noAsk?: number; lastPrice?: number }
+      >;
+    }>('/markets/prices', { method: 'POST', body: JSON.stringify({ tickers }) }),
+
   changePassword: (currentPassword: string, newPassword: string) =>
     req<{ ok: boolean }>('/auth/change-password', {
       method: 'POST',

@@ -25,10 +25,9 @@ function legLabel(gameTitle: string, market: Market, side: Side): string {
   return `${gameTitle} · ${bet} · ${side.toUpperCase()}`;
 }
 
-function priceFor(market: Market, side: Side): number {
-  const ask = side === 'yes' ? market.yesAsk : market.noAsk;
-  return ask && ask >= 1 && ask <= 99 ? ask : 50;
-}
+// New basket legs default to a 99¢ limit — an aggressive buy that fills at the
+// best available price up to 99¢.
+const DEFAULT_LIMIT = 99;
 
 function priceChip(ask?: number | null): string {
   return ask && ask >= 1 && ask <= 99 ? `${ask}¢` : '—';
@@ -107,7 +106,7 @@ function GameCard({ game, sport }: { game: Game; sport: string }) {
       action: 'buy',
       side,
       count: 1,
-      price: priceFor(market, side),
+      price: DEFAULT_LIMIT,
     });
   }
 

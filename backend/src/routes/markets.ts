@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { kalshi, KalshiError, KalshiNotConfigured } from '../kalshi/client.js';
 import type { KalshiMarket } from '../kalshi/types.js';
 import { SPORTS, SPORT_ORDER } from '../sports.js';
@@ -118,7 +119,36 @@ export async function marketsRoutes(app: FastifyInstance) {
     try {
       const { ticker } = req.params as { ticker: string };
       const { market } = await kalshi.getMarket(ticker);
-      return { market };
+      return { market: mapMarket(market) };
+    } catch (err) {
+      return handleKalshiError(err, reply);
+    }
+  });
+
+  // Live prices for a set of tickers (basket refreshes this to show current bid/ask).
+  const pricesSchema = z.object({ tickers: z.array(z.string().min(1)).min(1).max(50) }).strict();
+  app.post('/markets/prices', async (req, reply) => {
+    const parsed = pricesSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    try {
+      const { markets } = await kalshi.getMarketsByTickers(parsed.data.tickers);
+      const prices: Record<
+        string,
+        { yesBid?: number; yesAsk?: number; noBid?: number; noAsk?: number; lastPrice?: number }
+      > = {};
+      for (const m of markets) {
+        prices[m.ticker] = {
+          yesBid: m.yes_bid,
+          yesAsk: m.yes_ask,
+          noBid: m.no_bid,
+          noAsk: m.no_ask,
+          lastPrice: m.last_price,
+        };
+      }
+      return { prices };
     } catch (err) {
       return handleKalshiError(err, reply);
     }

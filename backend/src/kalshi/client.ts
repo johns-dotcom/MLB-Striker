@@ -148,6 +148,13 @@ export const kalshi = {
     return request('GET', `/markets/${encodeURIComponent(ticker)}`);
   },
 
+  /** Batch fetch markets by ticker (for live basket prices). */
+  async getMarketsByTickers(tickers: string[]): Promise<{ markets: KalshiMarket[] }> {
+    return request('GET', '/markets', {
+      query: { tickers: tickers.join(','), limit: Math.min(Math.max(tickers.length, 1), 1000) },
+    });
+  },
+
   /** List series in a category (e.g. "Sports"). Used to discover MLB bet-type series. */
   async getSeriesList(params: { category?: string; limit?: number } = {}): Promise<{
     series: Array<{ ticker: string; title?: string; category?: string; tags?: string[] }>;
