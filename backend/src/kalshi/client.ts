@@ -4,6 +4,7 @@ import type {
   KalshiBalance,
   KalshiEvent,
   KalshiMarket,
+  KalshiOrder,
   KalshiPosition,
   V2OrderRequest,
   V2OrderResponse,
@@ -114,6 +115,16 @@ export const kalshi = {
 
   async getPositions(): Promise<{ market_positions: KalshiPosition[] }> {
     return request('GET', '/portfolio/positions');
+  },
+
+  /** List the member's orders (status: resting | canceled | executed). */
+  async getOrders(status = 'resting'): Promise<{ orders: KalshiOrder[] }> {
+    return request('GET', '/portfolio/orders', { query: { status, limit: 200 } });
+  },
+
+  /** Cancel a resting order (v2). Returns how many contracts were canceled. */
+  async cancelOrder(orderId: string): Promise<{ order_id?: string; reduced_by?: string }> {
+    return request('DELETE', `/portfolio/events/orders/${encodeURIComponent(orderId)}`);
   },
 
   /** MLB game events for the configured series. */

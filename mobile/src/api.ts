@@ -1,4 +1,4 @@
-import type { BasketLeg, Game, GameDetail, StrikeResult } from './types';
+import type { BasketLeg, Game, GameDetail, Order, StrikeResult } from './types';
 import { useAuth } from './authStore';
 
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
@@ -81,6 +81,13 @@ export const api = {
     req<GameDetail>(`/sports/${encodeURIComponent(sport)}/games/${encodeURIComponent(gameCode)}`),
 
   balance: () => req<{ env: string; balanceCents: number }>('/portfolio/balance'),
+
+  orders: () => req<{ env: string; orders: Order[] }>('/orders'),
+
+  cancelOrder: (orderId: string) =>
+    req<{ ok: boolean; reducedBy?: string }>(`/orders/${encodeURIComponent(orderId)}`, {
+      method: 'DELETE',
+    }),
 
   prices: (tickers: string[]) =>
     req<{

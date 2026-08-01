@@ -47,6 +47,17 @@ export interface BasketLeg {
   price: number; // cents, 1–99
 }
 
+export interface Order {
+  orderId: string;
+  ticker: string;
+  side: Side;
+  priceCents: number | null;
+  remaining: number | null;
+  initial: number | null;
+  status: string;
+  createdTime?: string;
+}
+
 export interface StrikeResult {
   env: string;
   basketId: string | null;

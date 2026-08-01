@@ -9,6 +9,7 @@ import { useAuth } from './src/authStore';
 import LoginScreen from './src/screens/LoginScreen';
 import GamesScreen from './src/screens/GamesScreen';
 import BasketScreen from './src/screens/BasketScreen';
+import OrdersScreen from './src/screens/OrdersScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -75,6 +76,13 @@ export default function App() {
             options={{
               tabBarIcon: ({ color }) => <TabIcon label="🧺" color={color} />,
               tabBarBadge: count > 0 ? count : undefined,
+            }}
+          />
+          <Tab.Screen
+            name="Orders"
+            component={OrdersScreen}
+            options={{
+              tabBarIcon: ({ color }) => <TabIcon label="🧾" color={color} />,
             }}
           />
           <Tab.Screen

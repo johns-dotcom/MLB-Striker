@@ -42,6 +42,21 @@ export interface KalshiPosition {
   total_traded: number;
 }
 
+// A member order as returned by GET /portfolio/orders.
+export interface KalshiOrder {
+  order_id: string;
+  ticker: string;
+  outcome_side?: 'yes' | 'no';
+  book_side?: 'bid' | 'ask';
+  status?: string;
+  yes_price_dollars?: string;
+  no_price_dollars?: string;
+  remaining_count_fp?: string;
+  initial_count_fp?: string;
+  fill_count_fp?: string;
+  created_time?: string;
+}
+
 export type OrderSide = 'yes' | 'no';
 export type OrderAction = 'buy' | 'sell';
 export type OrderType = 'limit' | 'market';
