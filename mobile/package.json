@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "build": "expo export --platform web",
+    "build": "expo export --platform web && cp serve.json dist/serve.json",
     "serve": "serve -s dist -l ${PORT:-3000}",
     "typecheck": "tsc --noEmit"
   },
