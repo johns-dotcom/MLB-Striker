@@ -117,7 +117,7 @@ function LegCard({ leg, prices }: { leg: BasketLeg; prices: PriceMap }) {
         <NumberField
           value={leg.count}
           min={1}
-          max={999}
+          max={1000000}
           onChange={(n) => updateLeg(leg.id, { count: n })}
         />
       </View>
