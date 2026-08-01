@@ -180,7 +180,11 @@ export const kalshi = {
       `/events/${encodeURIComponent(eventTicker)}`,
       { query: { with_nested_markets: 'true' } },
     );
-    return { event: r.event, markets: r.markets ?? r.event?.markets ?? [] };
+    // Kalshi puts an empty `markets: []` at the top level and the real markets
+    // under `event.markets`. Prefer whichever is actually populated.
+    const nested = r.event?.markets ?? [];
+    const top = r.markets ?? [];
+    return { event: r.event, markets: nested.length ? nested : top };
   },
 
   /**

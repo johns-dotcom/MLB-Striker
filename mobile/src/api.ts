@@ -60,10 +60,13 @@ export class ApiError extends Error {
 export const api = {
   health: () => req<{ ok: boolean; env: string; dbEnabled: boolean }>('/health'),
 
-  games: () => req<{ env: string; games: Game[] }>('/mlb/games'),
+  sports: () => req<{ sports: { key: string; label: string }[] }>('/sports'),
 
-  gameDetail: (gameCode: string) =>
-    req<GameDetail>(`/mlb/game/${encodeURIComponent(gameCode)}`),
+  games: (sport: string) =>
+    req<{ sport: string; env: string; games: Game[] }>(`/sports/${encodeURIComponent(sport)}/games`),
+
+  gameDetail: (sport: string, gameCode: string) =>
+    req<GameDetail>(`/sports/${encodeURIComponent(sport)}/games/${encodeURIComponent(gameCode)}`),
 
   balance: () => req<{ env: string; balanceCents: number }>('/portfolio/balance'),
 

@@ -21,19 +21,20 @@ function save(codes: string[]) {
 }
 
 interface PinsState {
-  pinned: string[]; // ordered; most-recently pinned last
-  isPinned: (code: string) => boolean;
-  toggle: (code: string) => void;
+  // Ordered list of pinned game event tickers (globally unique across sports).
+  pinned: string[];
+  isPinned: (eventTicker: string) => boolean;
+  toggle: (eventTicker: string) => void;
 }
 
 export const usePins = create<PinsState>((set, get) => ({
   pinned: load(),
-  isPinned: (code) => get().pinned.includes(code),
-  toggle: (code) =>
+  isPinned: (id) => get().pinned.includes(id),
+  toggle: (id) =>
     set((s) => {
-      const next = s.pinned.includes(code)
-        ? s.pinned.filter((c) => c !== code)
-        : [...s.pinned, code];
+      const next = s.pinned.includes(id)
+        ? s.pinned.filter((c) => c !== id)
+        : [...s.pinned, id];
       save(next);
       return { pinned: next };
     }),

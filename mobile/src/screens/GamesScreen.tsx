@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,7 +18,6 @@ import { usePins } from '../pinsStore';
 import type { BetCategory, Game, GameDetail, Market, Side } from '../types';
 import EnvBanner from '../components/EnvBanner';
 
-// Build a descriptive basket label, e.g. "St. Louis vs Toronto · Over 4.5 runs · YES".
 function legLabel(gameTitle: string, market: Market, side: Side): string {
   const bet = (side === 'yes' ? market.yesSubTitle : market.noSubTitle) ?? market.title;
   return `${gameTitle} · ${bet} · ${side.toUpperCase()}`;
@@ -28,14 +28,7 @@ function priceFor(market: Market, side: Side): number {
   return ask && ask >= 1 && ask <= 99 ? ask : 50;
 }
 
-/** A YES/NO pair of add buttons for one market. */
-function SideButtons({
-  market,
-  onAdd,
-}: {
-  market: Market;
-  onAdd: (side: Side) => void;
-}) {
+function SideButtons({ market, onAdd }: { market: Market; onAdd: (side: Side) => void }) {
   return (
     <View style={{ flexDirection: 'row', gap: theme.space(2) }}>
       <TouchableOpacity
@@ -56,11 +49,9 @@ function SideButtons({
 
 function CategoryBlock({
   category,
-  gameTitle,
   onAdd,
 }: {
   category: BetCategory;
-  gameTitle: string;
   onAdd: (market: Market, side: Side) => void;
 }) {
   return (
@@ -78,10 +69,10 @@ function CategoryBlock({
   );
 }
 
-function GameCard({ game }: { game: Game }) {
+function GameCard({ game, sport }: { game: Game; sport: string }) {
   const addLeg = useBasket((s) => s.addLeg);
   const { isPinned, toggle } = usePins();
-  const pinned = isPinned(game.gameCode);
+  const pinned = isPinned(game.eventTicker);
 
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<GameDetail | null>(null);
@@ -106,7 +97,7 @@ function GameCard({ game }: { game: Game }) {
       setLoading(true);
       setError(null);
       try {
-        setDetail(await api.gameDetail(game.gameCode));
+        setDetail(await api.gameDetail(sport, game.gameCode));
       } catch (e) {
         setError(e instanceof ApiError ? e.message : String(e));
       } finally {
@@ -115,13 +106,12 @@ function GameCard({ game }: { game: Game }) {
     }
   }
 
-  // In the expanded view, skip "winner" — it's already the moneyline row up top.
   const extraCategories = detail?.categories.filter((c) => c.key !== 'winner') ?? [];
 
   return (
     <View style={[styles.card, pinned && styles.cardPinned]}>
       <View style={styles.cardHeader}>
-        <TouchableOpacity onPress={() => toggle(game.gameCode)} hitSlop={10}>
+        <TouchableOpacity onPress={() => toggle(game.eventTicker)} hitSlop={10}>
           <Text style={[styles.pin, pinned && styles.pinActive]}>{pinned ? '📌' : '📍'}</Text>
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
@@ -130,7 +120,6 @@ function GameCard({ game }: { game: Game }) {
         </View>
       </View>
 
-      {/* Moneyline quick row */}
       {game.markets.map((m) => (
         <View key={m.ticker} style={styles.betRow}>
           <Text style={styles.betLabel} numberOfLines={1}>
@@ -141,9 +130,7 @@ function GameCard({ game }: { game: Game }) {
       ))}
 
       <TouchableOpacity style={styles.moreBtn} onPress={toggleOpen}>
-        <Text style={styles.moreBtnText}>
-          {open ? 'Hide bets ▲' : 'All bets (totals, YRFI, spread…) ▼'}
-        </Text>
+        <Text style={styles.moreBtnText}>{open ? 'Hide bets ▲' : 'All bets ▼'}</Text>
       </TouchableOpacity>
 
       {open && (
@@ -154,7 +141,7 @@ function GameCard({ game }: { game: Game }) {
             <Text style={styles.dim}>No additional bet types open for this game yet.</Text>
           )}
           {extraCategories.map((c) => (
-            <CategoryBlock key={c.key} category={c} gameTitle={game.title} onAdd={add} />
+            <CategoryBlock key={c.key} category={c} onAdd={add} />
           ))}
         </View>
       )}
@@ -163,72 +150,150 @@ function GameCard({ game }: { game: Game }) {
 }
 
 export default function GamesScreen() {
+  const [sports, setSports] = useState<{ key: string; label: string }[]>([]);
+  const [sport, setSport] = useState<string>('');
   const [games, setGames] = useState<Game[]>([]);
   const [env, setEnv] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const pinned = usePins((s) => s.pinned);
 
+  // Load the sport list once, default to the first.
+  useEffect(() => {
+    api
+      .sports()
+      .then((d) => {
+        setSports(d.sports);
+        setSport((cur) => cur || d.sports[0]?.key || '');
+      })
+      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+  }, []);
+
   const load = useCallback(async () => {
+    if (!sport) return;
+    setLoading(true);
     setError(null);
     try {
-      const data = await api.games();
+      const data = await api.games(sport);
       setGames(data.games);
       setEnv(data.env);
     } catch (e) {
+      setGames([]);
       setError(e instanceof ApiError ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sport]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Pinned games first (in pin order), then the rest in feed order.
+  // Filter by search, then pinned games first.
   const ordered = useMemo(() => {
-    const pinnedGames = pinned
-      .map((code) => games.find((g) => g.gameCode === code))
-      .filter((g): g is Game => !!g);
-    const rest = games.filter((g) => !pinned.includes(g.gameCode));
-    return [...pinnedGames, ...rest];
-  }, [games, pinned]);
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.center} edges={['bottom']}>
-        <ActivityIndicator color={theme.colors.accent} size="large" />
-      </SafeAreaView>
-    );
-  }
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? games.filter((g) => `${g.title} ${g.subtitle ?? ''}`.toLowerCase().includes(q))
+      : games;
+    const pins = filtered.filter((g) => pinned.includes(g.eventTicker));
+    const rest = filtered.filter((g) => !pinned.includes(g.eventTicker));
+    // Keep pinned games in the order they were pinned.
+    pins.sort((a, b) => pinned.indexOf(a.eventTicker) - pinned.indexOf(b.eventTicker));
+    return [...pins, ...rest];
+  }, [games, pinned, query]);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <EnvBanner env={env} />
-      <ScrollView
-        contentContainerStyle={{ padding: theme.space(3), gap: theme.space(3) }}
-        refreshControl={
-          <RefreshControl refreshing={false} onRefresh={load} tintColor={theme.colors.textDim} />
-        }
-      >
-        {error && <Text style={styles.error}>{error}</Text>}
-        {!error && ordered.length === 0 && (
-          <Text style={styles.dim}>
-            No open MLB games right now. Pull to refresh.
-          </Text>
-        )}
-        {ordered.map((game) => (
-          <GameCard key={game.eventTicker} game={game} />
+
+      {/* Sport tabs */}
+      <View style={styles.tabs}>
+        {sports.map((s) => (
+          <TouchableOpacity
+            key={s.key}
+            style={[styles.tab, sport === s.key && styles.tabActive]}
+            onPress={() => setSport(s.key)}
+          >
+            <Text style={[styles.tabText, sport === s.key && styles.tabTextActive]}>{s.label}</Text>
+          </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
+
+      {/* Search */}
+      <TextInput
+        style={styles.search}
+        placeholder="Search games (team name)…"
+        placeholderTextColor={theme.colors.textDim}
+        value={query}
+        onChangeText={setQuery}
+        autoCapitalize="none"
+        autoCorrect={false}
+        clearButtonMode="while-editing"
+      />
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={theme.colors.accent} size="large" />
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ padding: theme.space(3), gap: theme.space(3) }}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={false} onRefresh={load} tintColor={theme.colors.textDim} />
+          }
+        >
+          {error && <Text style={styles.error}>{error}</Text>}
+          {!error && ordered.length === 0 && (
+            <Text style={styles.dim}>
+              {query
+                ? 'No games match your search.'
+                : 'No open games for this sport right now (it may be off-season). Pull to refresh.'}
+            </Text>
+          )}
+          {ordered.map((game) => (
+            <GameCard key={game.eventTicker} game={game} sport={sport} />
+          ))}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.bg },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabs: {
+    flexDirection: 'row',
+    gap: theme.space(2),
+    paddingHorizontal: theme.space(3),
+    paddingTop: theme.space(3),
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: theme.space(2),
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+  },
+  tabActive: { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent },
+  tabText: { color: theme.colors.textDim, fontWeight: '700', fontSize: 14 },
+  tabTextActive: { color: '#fff' },
+  search: {
+    margin: theme.space(3),
+    marginBottom: 0,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    color: theme.colors.text,
+    paddingHorizontal: theme.space(3),
+    paddingVertical: theme.space(3),
+    fontSize: 15,
+  },
   card: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,

@@ -1,24 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { kalshi, KalshiError, KalshiNotConfigured } from '../kalshi/client.js';
 import type { KalshiMarket } from '../kalshi/types.js';
-
-const GAME_SERIES = 'KXMLBGAME';
-
-// Per-game bet-type series, in display order. Each game's events across these
-// series share the same code suffix (e.g. "26AUG011507STLTOR").
-const BET_SERIES: { key: string; label: string; prefix: string }[] = [
-  { key: 'winner', label: 'Game Winner', prefix: 'KXMLBGAME' },
-  { key: 'spread', label: 'Run Line (Spread)', prefix: 'KXMLBSPREAD' },
-  { key: 'total', label: 'Total Runs (Over/Under)', prefix: 'KXMLBTOTAL' },
-  { key: 'teamtotal', label: 'Team Total Runs', prefix: 'KXMLBTEAMTOTAL' },
-  { key: 'rfi', label: 'Run in 1st Inning (YRFI / NRFI)', prefix: 'KXMLBRFI' },
-  { key: 'f3', label: 'First 3 Innings — Winner', prefix: 'KXMLBF3' },
-  { key: 'f5', label: 'First 5 Innings — Winner', prefix: 'KXMLBF5' },
-  { key: 'f5spread', label: 'First 5 Innings — Spread', prefix: 'KXMLBF5SPREAD' },
-  { key: 'f5total', label: 'First 5 Innings — Total', prefix: 'KXMLBF5TOTAL' },
-  { key: 'f7', label: 'First 7 Innings — Winner', prefix: 'KXMLBF7' },
-  { key: 'extras', label: 'Extra Innings', prefix: 'KXMLBEXTRAS' },
-];
+import { SPORTS, SPORT_ORDER } from '../sports.js';
 
 function mapMarket(m: KalshiMarket) {
   return {
@@ -42,50 +25,79 @@ function gameCodeFromEventTicker(eventTicker: string): string {
   return dash >= 0 ? eventTicker.slice(dash + 1) : eventTicker;
 }
 
+// Run async fn over items with bounded concurrency (keeps us under Kalshi's
+// rate limit when a game fans out to ~22 bet-type series).
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      try {
+        results[idx] = { status: 'fulfilled', value: await fn(items[idx]) };
+      } catch (reason) {
+        results[idx] = { status: 'rejected', reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 export async function marketsRoutes(app: FastifyInstance) {
-  // Game list — one nested call to the winner series. Each game carries its
-  // winner markets for a quick moneyline preview; full bets load on demand.
-  app.get('/mlb/games', async (_req, reply) => {
+  // Available sports (for the browse-page tabs).
+  app.get('/sports', async () => ({
+    sports: SPORT_ORDER.map((k) => ({ key: SPORTS[k].key, label: SPORTS[k].label })),
+  }));
+
+  // Game list for a sport — one nested call to its winner series.
+  app.get('/sports/:sport/games', async (req, reply) => {
+    const sport = SPORTS[(req.params as { sport: string }).sport];
+    if (!sport) {
+      reply.code(404);
+      return { error: 'unknown_sport' };
+    }
     try {
-      const { events } = await kalshi.getEventsBySeries(GAME_SERIES, {
+      const { events } = await kalshi.getEventsBySeries(sport.gameSeries, {
         status: 'open',
         limit: 60,
         withNestedMarkets: true,
       });
-
       const games = events.map((ev) => ({
         eventTicker: ev.event_ticker,
         gameCode: gameCodeFromEventTicker(ev.event_ticker),
         title: ev.title,
         subtitle: ev.sub_title,
-        markets: (ev.markets ?? [])
-          .filter((m) => m.status === 'active')
-          .map(mapMarket),
+        markets: (ev.markets ?? []).filter((m) => m.status === 'active').map(mapMarket),
       }));
-
-      return { env: kalshi.env, games };
+      return { sport: sport.key, env: kalshi.env, games };
     } catch (err) {
       return handleKalshiError(err, reply);
     }
   });
 
-  // All bet types for one game, grouped into categories. Fans out one call per
-  // bet-type series; series without this game (404) are skipped.
-  app.get('/mlb/game/:gameCode', async (req, reply) => {
+  // All bet types for one game, grouped into categories.
+  app.get('/sports/:sport/games/:gameCode', async (req, reply) => {
+    const { sport: sportKey, gameCode } = req.params as { sport: string; gameCode: string };
+    const sport = SPORTS[sportKey];
+    if (!sport) {
+      reply.code(404);
+      return { error: 'unknown_sport' };
+    }
     try {
-      const { gameCode } = req.params as { gameCode: string };
-
-      const settled = await Promise.allSettled(
-        BET_SERIES.map(async (b) => {
-          const { event, markets } = await kalshi.getEvent(`${b.prefix}-${gameCode}`);
-          return { bet: b, event, markets };
-        }),
-      );
+      const settled = await mapLimit(sport.bets, 6, async (bet) => {
+        const { event, markets } = await kalshi.getEvent(`${bet.prefix}-${gameCode}`);
+        return { bet, event, markets };
+      });
 
       let title: string | undefined;
       const categories = [];
       for (const r of settled) {
-        if (r.status !== 'fulfilled') continue; // 404 / not offered for this game
+        if (r.status !== 'fulfilled') continue; // series without this game (404) skipped
         const { bet, event, markets } = r.value;
         title = title ?? event?.title;
         const active = markets.filter((m) => m.status === 'active').map(mapMarket);
@@ -96,7 +108,7 @@ export async function marketsRoutes(app: FastifyInstance) {
         reply.code(404);
         return { error: 'no_markets_for_game', gameCode };
       }
-      return { env: kalshi.env, gameCode, title, categories };
+      return { sport: sport.key, env: kalshi.env, gameCode, title, categories };
     } catch (err) {
       return handleKalshiError(err, reply);
     }
