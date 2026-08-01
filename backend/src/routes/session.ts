@@ -1,38 +1,52 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
+import { changeAppPassword, verifyAppPassword } from '../authService.js';
 
 const loginSchema = z.object({ password: z.string().min(1).max(200) }).strict();
 
-// Constant-time string comparison (avoids leaking the password via timing).
-function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 /**
- * Public login route. The web app posts the shared password and receives the
- * API bearer token, which it then sends on every subsequent request. Keeps the
- * trade-capable token out of the public web bundle.
+ * Public login route. Posts the shared password and receives the API bearer
+ * token. Password is checked against the DB-stored hash (set in the app's
+ * Settings screen), falling back to the APP_PASSWORD env var.
  */
 export async function sessionRoutes(app: FastifyInstance) {
   app.post('/auth/login', async (req, reply) => {
-    if (!config.appPassword) {
-      reply.code(503);
-      return { error: 'login_not_configured' };
-    }
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400);
       return { error: 'invalid_request' };
     }
-    // Trim both sides — mobile keyboards/autofill often add a trailing space.
-    if (!safeEqual(parsed.data.password.trim(), config.appPassword.trim())) {
+    if (!(await verifyAppPassword(parsed.data.password))) {
       reply.code(401);
       return { error: 'invalid_password' };
     }
     return { token: config.apiAuthToken };
+  });
+}
+
+const changeSchema = z
+  .object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(1).max(200) })
+  .strict();
+
+/** Authenticated: change the login password (stored hashed in the DB). */
+export async function sessionAuthedRoutes(app: FastifyInstance) {
+  app.post('/auth/change-password', async (req, reply) => {
+    const parsed = changeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    const result = await changeAppPassword(parsed.data.currentPassword, parsed.data.newPassword);
+    if (result.ok) return { ok: true };
+
+    const map = {
+      db_required: [503, 'Password changes require the database, which is not configured.'],
+      wrong_current: [401, 'Current password is incorrect.'],
+      weak_new: [422, 'New password must be at least 6 characters.'],
+    } as const;
+    const [code, message] = map[result.code];
+    reply.code(code);
+    return { error: result.code, message };
   });
 }

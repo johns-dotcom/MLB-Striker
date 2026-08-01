@@ -27,3 +27,11 @@ CREATE TABLE IF NOT EXISTS basket_orders (
 
 CREATE INDEX IF NOT EXISTS idx_basket_orders_basket ON basket_orders(basket_id);
 CREATE INDEX IF NOT EXISTS idx_baskets_created ON baskets(created_at DESC);
+
+-- Single-row table holding the app login password hash (set from the app's
+-- Settings screen). When empty, login falls back to the APP_PASSWORD env var.
+CREATE TABLE IF NOT EXISTS app_auth (
+  id            INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  password_hash TEXT NOT NULL,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import { config } from './config.js';
 import { requireAuth } from './auth.js';
 import { healthRoutes } from './routes/health.js';
-import { sessionRoutes } from './routes/session.js';
+import { sessionRoutes, sessionAuthedRoutes } from './routes/session.js';
 import { marketsRoutes } from './routes/markets.js';
 import { ordersRoutes } from './routes/orders.js';
 import { portfolioRoutes } from './routes/portfolio.js';
@@ -32,6 +32,7 @@ async function main() {
     await authed.register(marketsRoutes);
     await authed.register(portfolioRoutes);
     await authed.register(ordersRoutes);
+    await authed.register(sessionAuthedRoutes);
     await authed.register(debugRoutes);
     // Re-expose the auth'd Kalshi readiness check.
     authed.get('/ready', async () => ({ ok: true, env: config.kalshi.env }));

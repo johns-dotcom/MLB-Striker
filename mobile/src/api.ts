@@ -78,6 +78,12 @@ export const api = {
   history: () =>
     req<{ dbEnabled: boolean; baskets: Record<string, unknown>[] }>('/history/baskets'),
 
+  changePassword: (currentPassword: string, newPassword: string) =>
+    req<{ ok: boolean }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
   strike: (legs: BasketLeg[], expectEnv: string, note?: string) =>
     req<StrikeResult>('/basket/strike', {
       method: 'POST',
