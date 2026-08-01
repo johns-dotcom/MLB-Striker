@@ -80,6 +80,8 @@ export const api = {
   gameDetail: (sport: string, gameCode: string) =>
     req<GameDetail>(`/sports/${encodeURIComponent(sport)}/games/${encodeURIComponent(gameCode)}`),
 
+  balance: () => req<{ env: string; balanceCents: number }>('/portfolio/balance'),
+
   prices: (tickers: string[]) =>
     req<{
       prices: Record<

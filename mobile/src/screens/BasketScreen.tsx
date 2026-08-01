@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError } from '../api';
 import { theme } from '../theme';
-import { usd } from '../format';
+import { usd, centsToUsd } from '../format';
 import { useBasket } from '../store';
 import type { BasketLeg, Side, StrikeResult } from '../types';
 import EnvBanner from '../components/EnvBanner';
@@ -144,10 +144,24 @@ export default function BasketScreen() {
   const [error, setError] = useState<string | null>(null);
   const [prices, setPrices] = useState<PriceMap>({});
   const [env, setEnv] = useState('');
+  const [balanceCents, setBalanceCents] = useState<number | null>(null);
 
   useEffect(() => {
     api.health().then((h) => setEnv(h.env)).catch(() => {});
   }, []);
+
+  // Live balance feed: fetch on mount, then poll every 15s while on this screen.
+  const refreshBalance = useCallback(() => {
+    api
+      .balance()
+      .then((b) => setBalanceCents(b.balanceCents))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    refreshBalance();
+    const id = setInterval(refreshBalance, 15000);
+    return () => clearInterval(id);
+  }, [refreshBalance]);
 
   const tickerKey = legs.map((l) => l.ticker).join(',');
   const refreshPrices = useCallback(async () => {
@@ -207,9 +221,33 @@ export default function BasketScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <EnvBanner env={env} />
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.balanceBar}>
+          <View>
+            <Text style={styles.balanceLabel}>Available balance</Text>
+            <Text style={styles.balanceValue}>
+              {balanceCents == null ? '—' : centsToUsd(balanceCents)}
+              <Text style={styles.liveDot}>  ● live</Text>
+            </Text>
+          </View>
+          {legs.length > 0 && balanceCents != null && (
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.balanceLabel}>After this basket</Text>
+              <Text style={styles.balanceValue}>
+                {usd(Math.max(0, balanceCents / 100 - totalRiskUsd()))}
+              </Text>
+            </View>
+          )}
+        </View>
+
         {legs.length > 0 && (
-          <TouchableOpacity style={styles.refresh} onPress={refreshPrices}>
-            <Text style={styles.refreshText}>↻ Refresh live prices</Text>
+          <TouchableOpacity
+            style={styles.refresh}
+            onPress={() => {
+              refreshPrices();
+              refreshBalance();
+            }}
+          >
+            <Text style={styles.refreshText}>↻ Refresh prices + balance</Text>
           </TouchableOpacity>
         )}
 
@@ -292,6 +330,19 @@ const styles = StyleSheet.create({
     padding: theme.space(4),
     gap: theme.space(3),
   },
+  balanceBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    padding: theme.space(3),
+  },
+  balanceLabel: { color: theme.colors.textDim, fontSize: 12 },
+  balanceValue: { color: theme.colors.text, fontSize: 20, fontWeight: '800', marginTop: 2 },
+  liveDot: { color: theme.colors.yes, fontSize: 11, fontWeight: '700' },
   refresh: { alignSelf: 'flex-end' },
   refreshText: { color: theme.colors.accent, fontWeight: '700', fontSize: 13 },
   empty: { color: theme.colors.textDim, fontSize: 14, lineHeight: 20 },
