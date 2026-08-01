@@ -14,9 +14,23 @@ export interface Market {
 
 export interface Game {
   eventTicker: string;
+  gameCode: string;
   title: string;
   subtitle?: string;
   markets: Market[];
+}
+
+export interface BetCategory {
+  key: string;
+  label: string;
+  markets: Market[];
+}
+
+export interface GameDetail {
+  env: string;
+  gameCode: string;
+  title?: string;
+  categories: BetCategory[];
 }
 
 export type Side = 'yes' | 'no';

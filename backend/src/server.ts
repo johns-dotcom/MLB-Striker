@@ -7,6 +7,7 @@ import { sessionRoutes } from './routes/session.js';
 import { marketsRoutes } from './routes/markets.js';
 import { ordersRoutes } from './routes/orders.js';
 import { portfolioRoutes } from './routes/portfolio.js';
+import { debugRoutes } from './routes/debug.js';
 
 async function main() {
   const app = Fastify({
@@ -31,6 +32,7 @@ async function main() {
     await authed.register(marketsRoutes);
     await authed.register(portfolioRoutes);
     await authed.register(ordersRoutes);
+    await authed.register(debugRoutes);
     // Re-expose the auth'd Kalshi readiness check.
     authed.get('/ready', async () => ({ ok: true, env: config.kalshi.env }));
   });

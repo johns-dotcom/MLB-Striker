@@ -62,15 +62,23 @@ async function request<T>(
     path,
   });
 
-  const res = await fetch(url, {
-    method,
-    headers: {
-      ...authHeaders,
-      Accept: 'application/json',
-      ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
+  // Retry briefly on 429 (rate limit) — the game-detail view fans out ~11 calls.
+  let res: Response;
+  let attempt = 0;
+  for (;;) {
+    res = await fetch(url, {
+      method,
+      headers: {
+        ...authHeaders,
+        Accept: 'application/json',
+        ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    if (res.status !== 429 || attempt >= 2) break;
+    attempt += 1;
+    await new Promise((r) => setTimeout(r, 400 * attempt));
+  }
 
   const text = await res.text();
   const parsed = text ? safeJson(text) : undefined;
@@ -138,6 +146,41 @@ export const kalshi = {
 
   async getMarket(ticker: string): Promise<{ market: KalshiMarket }> {
     return request('GET', `/markets/${encodeURIComponent(ticker)}`);
+  },
+
+  /** List series in a category (e.g. "Sports"). Used to discover MLB bet-type series. */
+  async getSeriesList(params: { category?: string; limit?: number } = {}): Promise<{
+    series: Array<{ ticker: string; title?: string; category?: string; tags?: string[] }>;
+  }> {
+    return request('GET', '/series', {
+      query: { category: params.category ?? 'Sports', limit: params.limit ?? 500 },
+    });
+  },
+
+  /** Events for any series ticker (generic form of getMlbEvents). */
+  async getEventsBySeries(
+    seriesTicker: string,
+    params: { status?: string; limit?: number; withNestedMarkets?: boolean } = {},
+  ): Promise<{ events: KalshiEvent[] }> {
+    return request('GET', '/events', {
+      query: {
+        series_ticker: seriesTicker,
+        status: params.status ?? 'open',
+        limit: params.limit ?? 50,
+        with_nested_markets: params.withNestedMarkets ? 'true' : 'false',
+      },
+    });
+  },
+
+  /** A single event with its nested markets (normalised — Kalshi nests them
+   * either at the top level or under `event`). */
+  async getEvent(eventTicker: string): Promise<{ event: KalshiEvent; markets: KalshiMarket[] }> {
+    const r = await request<{ event: KalshiEvent; markets?: KalshiMarket[] }>(
+      'GET',
+      `/events/${encodeURIComponent(eventTicker)}`,
+      { query: { with_nested_markets: 'true' } },
+    );
+    return { event: r.event, markets: r.markets ?? r.event?.markets ?? [] };
   },
 
   /**

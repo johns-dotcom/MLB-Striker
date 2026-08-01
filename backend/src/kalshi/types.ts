@@ -26,6 +26,8 @@ export interface KalshiEvent {
   title: string;
   sub_title?: string;
   category?: string;
+  // Present when the event is fetched with_nested_markets=true.
+  markets?: KalshiMarket[];
 }
 
 export interface KalshiBalance {
