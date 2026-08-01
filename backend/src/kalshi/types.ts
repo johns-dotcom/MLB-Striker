@@ -74,3 +74,23 @@ export interface KalshiOrderResult {
 export interface KalshiBatchOrderResponse {
   orders: KalshiOrderResult[];
 }
+
+// v2 create-order endpoint (POST /portfolio/events/orders). All prices are the
+// YES price in dollars; counts/prices are fixed-point strings.
+export interface V2OrderRequest {
+  ticker: string;
+  side: 'bid' | 'ask'; // bid = buy YES, ask = sell YES (≡ buy NO)
+  count: string; // e.g. "10.00"
+  price: string; // YES price in dollars, e.g. "0.5600"
+  time_in_force: 'good_till_canceled' | 'fill_or_kill' | 'immediate_or_cancel';
+  self_trade_prevention_type: 'taker_at_cross' | 'maker';
+  client_order_id?: string;
+}
+
+export interface V2OrderResponse {
+  order_id?: string;
+  client_order_id?: string;
+  fill_count?: string;
+  remaining_count?: string;
+  average_fill_price?: string;
+}

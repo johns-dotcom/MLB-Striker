@@ -2,11 +2,11 @@ import { config } from '../config.js';
 import { normalizePrivateKey, signRequest } from './sign.js';
 import type {
   KalshiBalance,
-  KalshiBatchOrderResponse,
   KalshiEvent,
   KalshiMarket,
-  KalshiOrderRequest,
   KalshiPosition,
+  V2OrderRequest,
+  V2OrderResponse,
 } from './types.js';
 
 const BASE = config.kalshi.baseUrl;
@@ -195,18 +195,13 @@ export const kalshi = {
   },
 
   /**
-   * Place a single order via the standard endpoint (available to all account
-   * tiers, unlike /portfolio/orders/batched which needs advanced permissions).
+   * Place a single order via the v2 create-order endpoint. The legacy
+   * /portfolio/orders (and /batched) endpoints are deprecated (HTTP 410).
+   * Everything is quoted from the YES side: `side` "bid" = buy YES, "ask" =
+   * sell YES (≡ buy NO at 1−price); `price` is the YES price in dollars.
    */
-  async placeOrder(order: KalshiOrderRequest): Promise<{
-    order?: { order_id: string; client_order_id: string; status: string };
-  }> {
-    return request('POST', '/portfolio/orders', { body: order });
-  },
-
-  /** Kept for reference; the batched endpoint requires advanced permissions. */
-  async placeBatchOrders(orders: KalshiOrderRequest[]): Promise<KalshiBatchOrderResponse> {
-    return request('POST', '/portfolio/orders/batched', { body: { orders } });
+  async placeOrder(order: V2OrderRequest): Promise<V2OrderResponse> {
+    return request('POST', '/portfolio/events/orders', { body: order });
   },
 };
 

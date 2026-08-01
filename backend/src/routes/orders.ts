@@ -83,13 +83,24 @@ export async function ordersRoutes(app: FastifyInstance) {
     }));
 
     try {
-      // Place each order individually (the batched endpoint needs advanced
-      // permissions). Capture a per-order outcome so partial failures surface.
+      // Place each order individually via the v2 endpoint. Everything is quoted
+      // from the YES side: buy YES → bid; buy NO → ask at (1 − price).
       const outcomes: LoggedOrderOutcome[] = [];
       for (const order of orders) {
+        const priceCents = order.side === 'yes' ? order.yes_price! : order.no_price!;
+        const yesCents = order.side === 'yes' ? priceCents : 100 - priceCents;
+        const v2Order = {
+          ticker: order.ticker,
+          side: order.side === 'yes' ? ('bid' as const) : ('ask' as const),
+          count: order.count.toFixed(2),
+          price: (yesCents / 100).toFixed(2),
+          time_in_force: 'good_till_canceled' as const,
+          self_trade_prevention_type: 'taker_at_cross' as const,
+          client_order_id: order.client_order_id,
+        };
         try {
-          const res = await kalshi.placeOrder(order);
-          outcomes.push({ order, kalshiOrderId: res.order?.order_id, status: 'accepted' });
+          const res = await kalshi.placeOrder(v2Order);
+          outcomes.push({ order, kalshiOrderId: res.order_id, status: 'accepted' });
         } catch (e) {
           if (e instanceof KalshiError) {
             const detail =
