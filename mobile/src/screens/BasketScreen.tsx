@@ -15,6 +15,7 @@ import { theme } from '../theme';
 import { usd } from '../format';
 import { useBasket } from '../store';
 import type { BasketLeg, Side, StrikeResult } from '../types';
+import EnvBanner from '../components/EnvBanner';
 
 const MAXW = 780;
 const DEFAULT_LIMIT = 99;
@@ -137,11 +138,16 @@ function LegCard({ leg, prices }: { leg: BasketLeg; prices: PriceMap }) {
 }
 
 export default function BasketScreen() {
-  const { legs, clear, totalRiskUsd } = useBasket();
+  const { legs, clear, removeLeg, totalRiskUsd } = useBasket();
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<StrikeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prices, setPrices] = useState<PriceMap>({});
+  const [env, setEnv] = useState('');
+
+  useEffect(() => {
+    api.health().then((h) => setEnv(h.env)).catch(() => {});
+  }, []);
 
   const tickerKey = legs.map((l) => l.ticker).join(',');
   const refreshPrices = useCallback(async () => {
@@ -171,7 +177,12 @@ export default function BasketScreen() {
       const h = await api.health();
       const res = await api.strike(legs, h.env);
       setResult(res);
-      if (res.status === 'submitted') clear();
+      // Remove only the legs that were accepted (placed on Kalshi) so a re-strike
+      // can't duplicate them; rejected legs stay so you can fix and retry.
+      const accepted = new Set(
+        res.results.filter((r) => r.status === 'accepted').map((r) => r.clientOrderId),
+      );
+      legs.filter((l) => accepted.has(l.id)).forEach((l) => removeLeg(l.id));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
     } finally {
@@ -194,6 +205,7 @@ export default function BasketScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      <EnvBanner env={env} />
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {legs.length > 0 && (
           <TouchableOpacity style={styles.refresh} onPress={refreshPrices}>

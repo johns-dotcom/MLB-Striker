@@ -14,7 +14,8 @@ const legSchema = z
     ticker: z.string().min(1),
     action: z.enum(['buy', 'sell']),
     side: z.enum(['yes', 'no']),
-    count: z.number().int().positive().max(10_000),
+    // Absolute ceiling; the real limiter is the per-leg notional cap below.
+    count: z.number().int().positive().max(1_000_000),
     // Limit price in cents (1–99) for the chosen side.
     price: z.number().int().min(1).max(99),
     clientOrderId: z.string().min(1).max(64).optional(),

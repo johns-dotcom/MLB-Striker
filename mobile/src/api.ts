@@ -13,13 +13,14 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
-  // A 401 means our token is stale/invalid — drop it so the login screen shows.
-  if (res.status === 401) {
-    useAuth.getState().logout();
-  }
   const text = await res.text();
   const body = text ? JSON.parse(text) : undefined;
   if (!res.ok) {
+    // Only drop the session on a genuine auth-token failure (requireAuth),
+    // not on business-logic 401s like a wrong current password.
+    if (res.status === 401 && body?.error === 'unauthorized') {
+      useAuth.getState().logout();
+    }
     const msg = body?.message || body?.error || `HTTP ${res.status}`;
     throw new ApiError(msg, res.status, body);
   }
