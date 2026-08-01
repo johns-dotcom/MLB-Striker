@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
-import { kalshi } from '../kalshi/client.js';
+import { kalshi, KalshiError } from '../kalshi/client.js';
 import { handleKalshiError } from './markets.js';
 import { logBasket, type LoggedOrderOutcome } from '../db/baskets.js';
 import type { KalshiOrderRequest } from '../kalshi/types.js';
@@ -83,18 +83,24 @@ export async function ordersRoutes(app: FastifyInstance) {
     }));
 
     try {
-      const res = await kalshi.placeBatchOrders(orders);
-
-      const outcomes: LoggedOrderOutcome[] = orders.map((order, i) => {
-        const r = res.orders?.[i];
-        const accepted = !!r?.order && !r?.error;
-        return {
-          order,
-          kalshiOrderId: r?.order?.order_id,
-          status: accepted ? 'accepted' : 'rejected',
-          error: r?.error ? `${r.error.code}: ${r.error.message}` : undefined,
-        };
-      });
+      // Place each order individually (the batched endpoint needs advanced
+      // permissions). Capture a per-order outcome so partial failures surface.
+      const outcomes: LoggedOrderOutcome[] = [];
+      for (const order of orders) {
+        try {
+          const res = await kalshi.placeOrder(order);
+          outcomes.push({ order, kalshiOrderId: res.order?.order_id, status: 'accepted' });
+        } catch (e) {
+          if (e instanceof KalshiError) {
+            const detail =
+              typeof e.body === 'object' ? JSON.stringify(e.body) : String(e.body ?? '');
+            req.log.warn({ ticker: order.ticker, status: e.status, detail }, 'order rejected');
+            outcomes.push({ order, status: 'rejected', error: `HTTP ${e.status}: ${detail}` });
+          } else {
+            outcomes.push({ order, status: 'rejected', error: (e as Error).message });
+          }
+        }
+      }
 
       const acceptedCount = outcomes.filter((o) => o.status === 'accepted').length;
       const status =
@@ -112,7 +118,8 @@ export async function ordersRoutes(app: FastifyInstance) {
         outcomes,
       });
 
-      reply.code(status === 'failed' ? 502 : 200);
+      // Always 200 — the basket was processed; per-order `status` conveys the
+      // outcome so the app can render each order's result (incl. rejection text).
       return {
         env: kalshi.env,
         basketId,

@@ -195,9 +195,16 @@ export const kalshi = {
   },
 
   /**
-   * Place up to 20 orders atomically-ish via the batched endpoint. Kalshi
-   * validates each order independently and returns a per-order result.
+   * Place a single order via the standard endpoint (available to all account
+   * tiers, unlike /portfolio/orders/batched which needs advanced permissions).
    */
+  async placeOrder(order: KalshiOrderRequest): Promise<{
+    order?: { order_id: string; client_order_id: string; status: string };
+  }> {
+    return request('POST', '/portfolio/orders', { body: order });
+  },
+
+  /** Kept for reference; the batched endpoint requires advanced permissions. */
   async placeBatchOrders(orders: KalshiOrderRequest[]): Promise<KalshiBatchOrderResponse> {
     return request('POST', '/portfolio/orders/batched', { body: { orders } });
   },
